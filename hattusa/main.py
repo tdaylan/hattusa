@@ -25,7 +25,7 @@ from astropy.coordinates import SkyCoord
 import tdpy.mcmc
 from tdpy.util import summgene
 import tdpy.util
-import tesstarg.util
+import ephesus.util
 
 def plot_totl(gdat, k, lcurmodl, lcurmodlevol, lcurmodlspot, dictpara):
     
@@ -54,7 +54,7 @@ def plot_totl(gdat, k, lcurmodl, lcurmodlevol, lcurmodlspot, dictpara):
         axis.plot(gdat.time, lcurmodlevol[i, :], color=gdat.listcolrspot[i], lw=3)
         axis.plot(gdat.time, lcurmodlspot[i, :], color=gdat.listcolrspot[i], ls='--', alpha=0.3, lw=3)
     ## raw data
-    axis.plot(gdat.time, gdat.lcurdataunbd, color='grey', ls='', marker='o', ms=0.5, rasterized=True)
+    axis.plot(gdat.timethis, gdat.lcurdataunbd, color='grey', ls='', marker='o', ms=0.5, rasterized=True)
     # binned data
     if gdat.boolbind:
         axis.errorbar(gdat.timebind, gdat.lcurdatabind, yerr=gdat.lcurdatastdvbind, color='k', ls='', marker='o', ms=2)
@@ -83,12 +83,6 @@ def retr_lpri(para, gdat):
     lpri = 0.
     for i in range(gdat.numbspot - 1):
         if dictpara['rrat'][i] < dictpara['rrat'][i+1]:
-            print('HEEEEEEEEEEEEEY')
-            print('HEEEEEEEEEEEEEY')
-            print('HEEEEEEEEEEEEEY')
-            print('HEEEEEEEEEEEEEY')
-            print('HEEEEEEEEEEEEEY')
-            print('HEEEEEEEEEEEEEY')
             lpri = -np.inf
     
     return lpri
@@ -108,6 +102,7 @@ def retr_llik(para, gdat):
 def pars_para(gdat, para):
     
     dictpara = dict()
+    
     dictpara['ldc1'] = para[0]
     dictpara['ldc2'] = para[1]
     dictpara['prot'] = para[2]
@@ -124,10 +119,14 @@ def pars_para(gdat, para):
         dictpara['timecent'] = para[indx+3]
         dictpara['timestdv'] = para[indx+4]
     
-    print('pars_para()')
-    print('dictpara')
-    print(dictpara)
-    print('')
+    if (dictpara['lati'] > 90).any() or (dictpara['lati'] < -90).any():
+        print('pars_para()')
+        print('dictpara')
+        print(dictpara)
+        print('dictpara[lati]')
+        print(dictpara['lati'])
+        raise Exception('')
+
     return dictpara
 
 
@@ -215,8 +214,7 @@ def init( \
          ticitarg=None, \
          labltarg=None, \
          strgtarg=None, \
-         boolevol=False, \
-
+         
          # data
          ## Boolean flag to bin the data
          boolbind=False, \
@@ -225,11 +223,18 @@ def init( \
          
          strgexpr='TESS', \
         
-         # mock data
-         numbplotdraw=100, \
-
+         # output
+         boolwrit=False, \
+         
+         # data processing
          # Boolean flag to bin the light curve
          boolbinnlcur=False, \
+
+         # model
+         boolevol=False, \
+
+         # mock data
+         numbplotdraw=100, \
 
          # Boolean flag to make data
          boolfitt=False, \
@@ -259,6 +264,7 @@ def init( \
 
     # number of parameters per star
     gdat.numbparastar = 6
+    gdat.numbparastartrue = gdat.numbparastar + 1
 
     # number of parameters per spot
     gdat.numbparaspot = 3
@@ -266,7 +272,7 @@ def init( \
         gdat.numbparaspot += 2
     
     # paths
-    gdat.pathbase = os.environ['TDGU_DATA_PATH'] + '/starspot/'
+    gdat.pathbase = os.environ['DATA'] + '/hattusa/'
     if strgtarg is not None:
         pathtarg = gdat.pathbase + strgtarg + '/'
         gdat.pathimag = pathtarg + 'imag/'
@@ -333,7 +339,7 @@ def init( \
         # rate of differential rotation (shear)
         listshea = np.random.rand(gdat.numbtarg) * 0.9 + 0.1
         
-        paratrue = np.empty((gdat.numbtarg, maxmnumbspot * gdat.numbparaspot + gdat.numbparastar + 1))
+        paratrue = np.empty((gdat.numbtarg, maxmnumbspot * gdat.numbparaspot + gdat.numbparastartrue))
         paratrue[:, 0] = listnumbspot
         paratrue[:, 1] = listldc1
         paratrue[:, 2] = listldc2
@@ -348,7 +354,8 @@ def init( \
         maxmtime = 180. * 6. * 1. / 6.
         gdat.time = np.linspace(minmtime, maxmtime, gdat.numbtime)
         
-        lcurdata = np.empty((gdat.numbtarg, gdat.numbtime))
+        gdat.lcurdata = np.empty((gdat.numbtarg, gdat.numbtime))
+        gdat.lcurdatastdv = np.empty((gdat.numbtarg, gdat.numbtime))
         liststrgtarg = []
         for k in gdat.indxtarg:
             liststrgtarg.append('targ%08d' % k)
@@ -365,28 +372,27 @@ def init( \
             # radius
             listrrat = np.random.rand(listnumbspot[k]) * 0.15 + 0.05
         
-            # central time of evolution
-            listtimecent = np.random.rand(listnumbspot[k]) * (maxmtime - minmtime) + minmtime
+            if gdat.boolevol:
+                # central time of evolution
+                listtimecent = np.random.rand(listnumbspot[k]) * (maxmtime - minmtime) + minmtime
         
-            # width of time evolution
-            listtimestdv = listprot[k] * (np.random.rand(listnumbspot[k]) * 2. + 1.)
-        
+                # width of time evolution
+                listtimestdv = listprot[k] * (np.random.rand(listnumbspot[k]) * 2. + 1.)
+            
             for i in range(gdat.numbspot):
-                indx = gdat.numbparastar + 1 + np.arange(gdat.numbspot) * gdat.numbparaspot
+                indx = gdat.numbparastartrue + np.arange(gdat.numbspot) * gdat.numbparaspot
                 paratrue[k, indx+0] = listlati
                 paratrue[k, indx+1] = listlngi
                 paratrue[k, indx+2] = listrrat
-                paratrue[k, indx+3] = listtimecent
-                paratrue[k, indx+4] = listtimestdv
+                if gdat.boolevol:
+                    paratrue[k, indx+3] = listtimecent
+                    paratrue[k, indx+4] = listtimestdv
             
             # get model light curve and its components
-            print('paratrue[k, 1:]')
-            print(paratrue[k, 1:])
-            print('')
             lcurmodl, lcurmodlevol, lcurmodlspot = retr_modl(gdat, paratrue[k, 1:])
 
             # add white noise to the overall light curve to get the synthetic data
-            lcurdata[k, :] = lcurmodl + np.random.randn(gdat.numbtime) * 1e-4
+            gdat.lcurdata[k, :] = lcurmodl + np.random.randn(gdat.numbtime) * 1e-4
             
             # add red noise
             sigm = np.random.rand() * 0.0005
@@ -394,8 +400,8 @@ def init( \
             logtsigm = np.log(sigm)
             logtrhoo = np.log(rhoo)
             noisredd = retr_noisredd(gdat.time, logtsigm, logtrhoo)
-            lcurdata[k, :] += noisredd
-            gdat.lcurdatastdv = lcurdata * 1e-3
+            gdat.lcurdata[k, :] += noisredd
+            gdat.lcurdatastdv[k, :] = gdat.lcurdata[k, :] * 1e-3
         
             if k % 100 == 0:
                 print(f'{k} light curves have been generated.')
@@ -403,7 +409,7 @@ def init( \
         # write to FITS file
         if boolwrit:
             hdunprim = fits.PrimaryHDU()
-            hduntrue = fits.ImageHDU(lcurdata)
+            hduntrue = fits.ImageHDU(gdat.lcurdata)
             hdunlcur = fits.ImageHDU(paratrue)
             listhdun = fits.HDUList([hdunprim, hduntrue, hdunlcur])
             strgtimestmp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -411,75 +417,73 @@ def init( \
             print(f'Writing to {path}')
             listhdun.writeto(path, overwrite=True)
         
-        timefinl = timemodu.time()
-        print('%g seconds elapsed.' % (timefinl - timeinit))
-    
-    
     for k in gdat.indxtarg:
         
         # get data
-        coord = SkyCoord.from_name(liststrgtarg[k])
-        pdcsap = lightkurve.search_lightcurvefile(coord, mission=strgexpr).download_all().PDCSAP_FLUX.stitch()
-        
-        # parse data
-        gdat.time = pdcsap.time
-        gdat.lcurdata = pdcsap.flux
-        gdat.lcurdatastdv = pdcsap.flux_err * gdat.factstdvfudg
-        gdat.lcurdatavari = gdat.lcurdatastdv**2
+        if gdat.datatype == 'inpt':
+            coord = SkyCoord.from_name(liststrgtarg[k])
+            pdcsap = lightkurve.search_lightcurvefile(coord, mission=strgexpr).download_all().PDCSAP_FLUX.stitch()
+            
+            # parse data
+            gdat.time = pdcsap.time
+            gdat.lcurdata = pdcsap.flux
+            gdat.lcurdatastdv = pdcsap.flux_err * gdat.factstdvfudg
+            gdat.lcurdatavari = gdat.lcurdatastdv**2
 
-        # get rid of NaNs
-        indx = np.where(np.isfinite(gdat.lcurdata) & np.isfinite(gdat.lcurdatavari))[0]
-        gdat.time = gdat.time[indx]
-        gdat.lcurdata = gdat.lcurdata[indx]
-        gdat.lcurdatastdv = gdat.lcurdatastdv[indx]
-        gdat.lcurdatavari = gdat.lcurdatavari[indx]
+            # get rid of NaNs
+            indx = np.where(np.isfinite(gdat.lcurdata) & np.isfinite(gdat.lcurdatavari))[0]
+            gdat.time = gdat.time[indx]
+            gdat.lcurdatathis = gdat.lcurdata[indx]
+            gdat.lcurdatastdvthis = gdat.lcurdatastdv[indx]
+            gdat.lcurdatavarithis = gdat.lcurdatavari[indx]
+            
+            # number of time bins
+            gdat.numbtime = gdat.time.size
+            
+            gdat.minmtime = np.amin(gdat.time)
+            gdat.maxmtime = np.amax(gdat.time)
+            
+            # find flares
+            maxmcorr, gdat.listindxtimeposimaxm, timetmpt = ephesus.util.find_flar(gdat.time, gdat.lcurdatathis, \
+                                                                                            strgextn=gdat.strgextn, pathimag=gdat.pathimag, \
+                                                                                                               boolplot=True, verbtype=gdat.verbtype)
+            
+            numbkern = len(maxmcorr)
+            indxkern = np.arange(numbkern)
+            
+            # mask out flares
+            listindxtimemask = []
+            for k in indxkern:
+                for indxtime in gdat.listindxtimeposimaxm[k]:
+                    indxtimemask = np.arange(indxtime - 60, indxtime + 60)
+                    listindxtimemask.append(indxtimemask)
+            indxtimemask = np.concatenate(listindxtimemask)
+            indxtimemask = np.unique(indxtimemask)
+            indxtimegood = np.setdiff1d(np.arange(gdat.time.size), indxtimemask)
+            gdat.time = gdat.time[indxtimegood]
+            gdat.lcurdata = gdat.lcurdata[indxtimegood]
+            gdat.lcurdatastdv = gdat.lcurdatastdv[indxtimegood]
+            gdat.numbtime = gdat.time.size
         
-        gdat.strgextn = '_%s_%s' % (strgtarg, strgexpr)
-        
-        # number of time bins
-        gdat.numbtime = gdat.time.size
-        
-        gdat.minmtime = np.amin(gdat.time)
-        gdat.maxmtime = np.amax(gdat.time)
-        
-        # find flares
-        maxmcorr, gdat.listindxtimeposimaxm, timetmpt = tesstarg.util.find_flar(gdat.time, gdat.lcurdata, \
-                                                                                        strgextn=gdat.strgextn, pathimag=gdat.pathimag, \
-                                                                                                           boolplot=True, verbtype=gdat.verbtype)
-        
-        numbkern = len(maxmcorr)
-        indxkern = np.arange(numbkern)
-        
-        # mask out flares
-        listindxtimemask = []
-        for k in indxkern:
-            for indxtime in gdat.listindxtimeposimaxm[k]:
-                indxtimemask = np.arange(indxtime - 60, indxtime + 60)
-                listindxtimemask.append(indxtimemask)
-        indxtimemask = np.concatenate(listindxtimemask)
-        indxtimemask = np.unique(indxtimemask)
-        indxtimegood = np.setdiff1d(np.arange(gdat.time.size), indxtimemask)
-        gdat.time = gdat.time[indxtimegood]
-        gdat.lcurdata = gdat.lcurdata[indxtimegood]
-        gdat.lcurdatastdv = gdat.lcurdatastdv[indxtimegood]
-        gdat.numbtime = gdat.time.size
-        
+        else:
+            strgtarg = 'mock%04d' % k
+            gdat.timethis = gdat.time
+            gdat.lcurdatathis = gdat.lcurdata[k, :]
+            gdat.lcurdatastdvthis = gdat.lcurdatastdv[k, :]
+        gdat.strgextn = '%s_%s' % (strgtarg, strgexpr)
+            
+            
         # normalize the light curve
         gdat.medilcurdata = np.median(gdat.lcurdata)
         gdat.lcurdatastdv /= gdat.medilcurdata
         gdat.lcurdata /= gdat.medilcurdata
         
         # plot light curve without the model
-        tesstarg.util.plot_lcur(gdat.pathimag, timedata=gdat.time, lcurdata=gdat.lcurdata, strgextn=gdat.strgextn)
+        ephesus.util.plot_lcur(gdat.pathimag, timedata=gdat.timethis, lcurdata=gdat.lcurdatathis, strgextn=gdat.strgextn)
         
-        # baseline-detrend the data
-        lcurbdtrregi, indxtimeregi, indxtimeregioutt, listobjtspln, timeedge = tesstarg.util.bdtr_lcur(gdat.time, gdat.lcurdata, durabrek=10., \
-                                                                                                          bdtrtype='medi', durakernbdtrmedi=durakernbdtrmedi)
-        gdat.lcurdata = np.concatenate(lcurbdtrregi)
-
-        gdat.timeunbd = np.copy(gdat.time)
-        gdat.lcurdataunbd = np.copy(gdat.lcurdata)
-        gdat.lcurdatastdvunbd = np.copy(gdat.lcurdatastdv)
+        gdat.timeunbd = np.copy(gdat.timethis)
+        gdat.lcurdataunbd = np.copy(gdat.lcurdatathis)
+        gdat.lcurdatastdvunbd = np.copy(gdat.lcurdatastdvthis)
         # bin down the data
         if gdat.boolbind:
             facttime = 200
@@ -507,15 +511,15 @@ def init( \
             gdat.lcurdatastdvbind = None
         
         if gdat.boolbinnlcur:
-            gdat.time = gdat.timebind
-            gdat.lcurdata = gdat.lcurdatabind
-            gdat.lcurdatastdv = gdat.lcurdatastdvbind
+            gdat.timeused = gdat.timebind
+            gdat.lcurdataused = gdat.lcurdatabind
+            gdat.lcurdatastdvused = gdat.lcurdatastdvbind
         else:
-            gdat.time = gdat.timeunbd
-            gdat.lcurdata = gdat.lcurdataunbd
-            gdat.lcurdatastdv = gdat.lcurdatastdvunbd
+            gdat.timeused = gdat.timeunbd
+            gdat.lcurdataused = gdat.lcurdataunbd
+            gdat.lcurdatastdvused = gdat.lcurdatastdvunbd
         
-        gdat.lcurdatavari = gdat.lcurdatastdv**2
+        gdat.lcurdatavari = gdat.lcurdatastdvused**2
         
         if gdat.datatype =='mock':
             if k < numbplotdraw:
@@ -523,22 +527,22 @@ def init( \
                 plot_totl(gdat, k, lcurmodl, lcurmodlevol, lcurmodlspot, dictpara)
         # sample from the posterior
         # plot light curve without the model
-        tesstarg.util.plot_lcur(gdat.pathimag, timedata=gdat.time, lcurdata=gdat.lcurdata, \
-                                 timedatabind=gdat.timebind, lcurdatabind=gdat.lcurdatabind, lcurdatastdvbind=gdat.lcurdatastdvbind, strgextn=gdat.strgextn)
+        ephesus.util.plot_lcur(gdat.pathimag, timedata=gdat.time, lcurdata=gdat.lcurdataused, \
+                       timedatabind=gdat.timebind, lcurdatabind=gdat.lcurdataused, lcurdatastdvbind=gdat.lcurdatastdvused, strgextn=gdat.strgextn)
         
         arrylcur = np.empty((gdat.numbtime, 3))
         arrylcur[:, 0] = gdat.time
-        arrylcur[:, 1] = gdat.lcurdata
-        arrylcur[:, 2] = gdat.lcurdatastdv
+        arrylcur[:, 1] = gdat.lcurdataused
+        arrylcur[:, 2] = gdat.lcurdatastdvused
         
-        tesstarg.util.plot_lspe(gdat.pathimag, arrylcur, strgextn=gdat.strgextn)
+        ephesus.util.plot_lspe(gdat.pathimag, arrylcur, strgextn=gdat.strgextn)
         
         if boolplotpcur:
             epoc = np.mean(gdat.time)
-            listperi = tesstarg.util.plot_lspe(gdat.pathimag, arrylcur, strgextn=gdat.strgextn)
+            listperi = ephesus.util.plot_lspe(gdat.pathimag, arrylcur, strgextn=gdat.strgextn)
             peri = listperi[0]
             print('Phase-folding with the period %g...' % peri)
-            tesstarg.util.plot_pcur(gdat.pathimag, arrylcur, booltime=True, epoc=epoc, peri=peri, strgextn=gdat.strgextn)
+            ephesus.util.plot_pcur(gdat.pathimag, arrylcur, booltime=True, epoc=epoc, peri=peri, strgextn=gdat.strgextn)
 
         if gdat.boolfitt:
             # for each spot multiplicity, fit the spot model
@@ -577,7 +581,7 @@ def init( \
                 # number of walkers
                 numbwalk = max(20, 2 * numbpara)
                     
-                numbdata = gdat.lcurdata.size
+                numbdata = gdat.lcurdataused.size
                 
                 # number of degrees of freedom
                 gdat.numbdoff = numbdata - numbpara
