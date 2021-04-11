@@ -1,4 +1,4 @@
-from datetime import datetime
+import datetime
 import os, sys
 import time as timemodu
 
@@ -22,10 +22,10 @@ import astropy.units as u
 from astropy.io import fits
 from astropy.coordinates import SkyCoord
 
-import tdpy.mcmc
-from tdpy.util import summgene
-import tdpy.util
-import ephesus.util
+import miletos
+import tdpy
+from tdpy import summgene
+import ephesus
 
 def plot_totl(gdat, k, lcurmodl, lcurmodlevol, lcurmodlspot, dictpara):
     
@@ -149,7 +149,7 @@ def retr_modl(gdat, para):
         phas = 360. * gdat.time / protlati
         
         # construct the fleck star object 
-        gdat.objtstar = fleck.Star(spot_contrast=gdat.cont, phases=phas, u_ld=ldcv)
+        gdat.objtstar = fleck.Star(spot_contrast=gdat.contspot, phases=phas, u_ld=ldcv)
     
         # forward-model the light curve
         lcurmodlspot[i, :] = gdat.objtstar.light_curve(dictpara['lngi'][i] * u.deg, dictpara['lati'][i] * u.deg, \
@@ -171,6 +171,7 @@ def retr_modl(gdat, para):
 
     
 def retr_protlati(prot, shea, lati):
+    """Return the rotation period at a list of latitudes given the shear"""
     
     protlati = prot * (1. + shea * np.sin(lati * np.pi / 180.)**2)
 
@@ -188,7 +189,7 @@ def plot_moll(gdat, lati, lngi, rrat):
         p = np.radians(lngi[k])
         spot_vec = hp.ang2vec(t, p)
         ipix_spots = hp.query_disc(nside=gdat.numbside, vec=spot_vec, radius=rrat[k])
-        m[ipix_spots] = gdat.cont
+        m[ipix_spots] = gdat.contspot
     cmap = plt.cm.Greys
     cmap.set_under('w')
     hp.mollview(m, cbar=False, title="", cmap=cmap, hold=True, max=1.0, notext=True, flip='geo')
@@ -211,10 +212,11 @@ def retr_noisredd(time, logtsigm, logtrhoo):
 
 
 def init( \
-         ticitarg=None, \
-         labltarg=None, \
-         strgtarg=None, \
-         
+         # type of population
+         typepopl='sc17', \
+         # type of data
+         typedata='real', \
+
          # data
          ## Boolean flag to bin the data
          boolbind=False, \
@@ -252,18 +254,24 @@ def init( \
         if '__' not in attr and attr != 'gdat':
             setattr(gdat, attr, valu)
 
+    # string for date and time
+    gdat.strgtimestmp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+    print('hattusa pipeline initialized at %s...' % gdat.strgtimestmp)
+    
     # global light curve parameters
-    # spot contrast
-    gdat.cont = 0.7
     
-    # fix seed
+    # fix seed for data generation
     np.random.seed(42)
-    
-    # fudge factor for inflating the uncertainties
-    gdat.factstdvfudg = 1e1
-
-    # number of parameters per star
+        
     gdat.numbparastar = 6
+    gdat.contspot = 0.7
+
+    dictparaspot = dict()
+    ## spot contrast
+    dictparaspot['contspot'] = gdat.contspot
+    ## number of parameters per star
+    dictparaspot['numbparastar'] = gdat.numbparastar
+    
     gdat.numbparastartrue = gdat.numbparastar + 1
 
     # number of parameters per spot
@@ -314,7 +322,7 @@ def init( \
         gdat.indxsamp = np.arange(gdat.numbsamp)
     
     if gdat.datatype == 'mock':
-        gdat.numbtarg = 100
+        gdat.numbtarg = 5
     else:
         gdat.numbtarg = len(gdat.listticitarg)
         
@@ -419,29 +427,22 @@ def init( \
         
     for k in gdat.indxtarg:
         
+        # call miletos to analyze data
+        dictmile = miletos.init( \
+                                rasctarg=rasctarg, \
+                                decltarg=decltarg, \
+                                listarrytser=listarrytser, \
+                                typemodl='bhol', \
+                                labltarg=labltarg, \
+                                boolclip=False, \
+                                boolexectmat=gdat.boolexectmat, \
+                                pathtarg=gdat.pathtarg[n], \
+                                thrssdeetlsq=gdat.thrssdeetlsq, \
+                               )
+        
+        
         # get data
         if gdat.datatype == 'inpt':
-            coord = SkyCoord.from_name(liststrgtarg[k])
-            pdcsap = lightkurve.search_lightcurvefile(coord, mission=strgexpr).download_all().PDCSAP_FLUX.stitch()
-            
-            # parse data
-            gdat.time = pdcsap.time
-            gdat.lcurdata = pdcsap.flux
-            gdat.lcurdatastdv = pdcsap.flux_err * gdat.factstdvfudg
-            gdat.lcurdatavari = gdat.lcurdatastdv**2
-
-            # get rid of NaNs
-            indx = np.where(np.isfinite(gdat.lcurdata) & np.isfinite(gdat.lcurdatavari))[0]
-            gdat.time = gdat.time[indx]
-            gdat.lcurdatathis = gdat.lcurdata[indx]
-            gdat.lcurdatastdvthis = gdat.lcurdatastdv[indx]
-            gdat.lcurdatavarithis = gdat.lcurdatavari[indx]
-            
-            # number of time bins
-            gdat.numbtime = gdat.time.size
-            
-            gdat.minmtime = np.amin(gdat.time)
-            gdat.maxmtime = np.amax(gdat.time)
             
             # find flares
             maxmcorr, gdat.listindxtimeposimaxm, timetmpt = ephesus.util.find_flar(gdat.time, gdat.lcurdatathis, \
@@ -472,15 +473,6 @@ def init( \
             gdat.lcurdatastdvthis = gdat.lcurdatastdv[k, :]
         gdat.strgextn = '%s_%s' % (strgtarg, strgexpr)
             
-            
-        # normalize the light curve
-        gdat.medilcurdata = np.median(gdat.lcurdata)
-        gdat.lcurdatastdv /= gdat.medilcurdata
-        gdat.lcurdata /= gdat.medilcurdata
-        
-        # plot light curve without the model
-        ephesus.util.plot_lcur(gdat.pathimag, timedata=gdat.timethis, lcurdata=gdat.lcurdatathis, strgextn=gdat.strgextn)
-        
         gdat.timeunbd = np.copy(gdat.timethis)
         gdat.lcurdataunbd = np.copy(gdat.lcurdatathis)
         gdat.lcurdatastdvunbd = np.copy(gdat.lcurdatastdvthis)
@@ -535,14 +527,6 @@ def init( \
         arrylcur[:, 1] = gdat.lcurdataused
         arrylcur[:, 2] = gdat.lcurdatastdvused
         
-        ephesus.util.plot_lspe(gdat.pathimag, arrylcur, strgextn=gdat.strgextn)
-        
-        if boolplotpcur:
-            epoc = np.mean(gdat.time)
-            listperi = ephesus.util.plot_lspe(gdat.pathimag, arrylcur, strgextn=gdat.strgextn)
-            peri = listperi[0]
-            print('Phase-folding with the period %g...' % peri)
-            ephesus.util.plot_pcur(gdat.pathimag, arrylcur, booltime=True, epoc=epoc, peri=peri, strgextn=gdat.strgextn)
 
         if gdat.boolfitt:
             # for each spot multiplicity, fit the spot model
@@ -651,27 +635,3 @@ def init( \
                 plt.savefig(path)
                 plt.close()
 
-
-def cnfg_cplxrota():
-
-    listtici = [206544316]
-   
-    numbtarg = len(listtici)
-    indxtarg = np.arange(numbtarg)
-    listticitarg = []
-    for k in indxtarg:
-        ticitarg = listtici[k]
-        listticitarg.append(ticitarg)
-
-    init(listticitarg=listticitarg)
-
-
-def cnfg_mockcplxrota():
-   
-    boolfitt = False
-    init(boolfitt=boolfitt)
-
-
-if __name__ == "__main__":
-    
-    globals().get(sys.argv[1])()
