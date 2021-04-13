@@ -281,23 +281,16 @@ def init( \
     
     # paths
     gdat.pathbase = os.environ['DATA'] + '/hattusa/'
-    if strgtarg is not None:
-        pathtarg = gdat.pathbase + strgtarg + '/'
-        gdat.pathimag = pathtarg + 'imag/'
-        gdat.pathdata = gdat.pathbase + 'data/'
-        os.system('mkdir -p %s' % pathtarg)
+    if gdat.typedata == 'mock':
+        strgdata = 'mock'
     else:
-        pathtarg = None
-        gdat.pathimag = gdat.pathbase + 'imag/mock/'
-        gdat.pathdata = gdat.pathbase + 'data/mock/'
+        strgdata = ''
+    gdat.pathdata = gdat.pathbase + 'data/%s_%s/' % (gdat.typepopl, strgdata)
+    gdat.pathimag = gdat.pathbase + 'imag/%s_%s/' % (gdat.typepopl, strgdata)
+    gdat.pathdata = gdat.pathbase + 'data/mock/'
     os.system('mkdir -p %s' % gdat.pathdata)
     os.system('mkdir -p %s' % gdat.pathimag)
     
-    if ticitarg is None:
-        gdat.datatype = 'mock'
-    else:
-        gdat.datatype = 'inpt'
-
     if ticitarg is not None:
         # string representing the target
         if strgtarg is None:
