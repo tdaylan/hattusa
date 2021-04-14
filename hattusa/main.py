@@ -421,20 +421,17 @@ def init( \
             path = gdat.pathdata + f'lcur_{strgtimestmp}.fits'
             print(f'Writing to {path}')
             listhdun.writeto(path, overwrite=True)
-        
+    
+    gdat.boolexectmat = True
+
     for k in gdat.indxtarg:
         
         # call miletos to analyze data
         dictmile = miletos.init( \
-                                rasctarg=rasctarg, \
-                                decltarg=decltarg, \
-                                listarrytser=listarrytser, \
-                                typemodl='bhol', \
-                                labltarg=labltarg, \
+                                ticitarg=gdat.listticitarg[k], \
+                                typemodl='flar', \
                                 boolclip=False, \
                                 boolexectmat=gdat.boolexectmat, \
-                                pathtarg=gdat.pathtarg[n], \
-                                thrssdeetlsq=gdat.thrssdeetlsq, \
                                )
         
         
