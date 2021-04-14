@@ -5,6 +5,8 @@ import time as timemodu
 import numpy as np
 import matplotlib.pyplot as plt
 
+import pandas as pd
+
 import scipy
 import scipy.signal
 from scipy import signal
@@ -291,14 +293,6 @@ def init( \
     os.system('mkdir -p %s' % gdat.pathdata)
     os.system('mkdir -p %s' % gdat.pathimag)
     
-    if ticitarg is not None:
-        # string representing the target
-        if strgtarg is None:
-            strgtarg = 'TIC%d' % ticitarg
-        # label representing the target
-        if labltarg is None:
-            labltarg = 'TIC %d' % ticitarg
-    
     if gdat.boolfitt:
         ## number of samples per walker
         gdat.numbsampwalk = 1000
@@ -314,14 +308,24 @@ def init( \
         gdat.numbsamp = (gdat.numbsampwalk - gdat.numbsampburnwalkseco) * numbwalk
         gdat.indxsamp = np.arange(gdat.numbsamp)
     
-    if gdat.datatype == 'mock':
+    # target selection
+    if typepopl == 'sc17':
+        pathdatatess = os.environ['TESS_DATA_PATH'] + '/data/'
+        path = pathdatatess + 'listtargtsec/all_targets_S%03d_v1.csv' % 17
+        objt = pd.read_csv(path, skiprows=5)
+        gdat.listticitarg = objt['TICID'].values
+        print('gdat.listticitarg')
+        summgene(gdat.listticitarg)
+        gdat.listticitarg = gdat.listticitarg[5:]
+
+    if gdat.typedata == 'mock':
         gdat.numbtarg = 5
     else:
         gdat.numbtarg = len(gdat.listticitarg)
         
     gdat.indxtarg = np.arange(gdat.numbtarg)
 
-    if gdat.datatype == 'mock':
+    if gdat.typedata == 'mock':
         
         # number of spots
         maxmnumbspot = 4
@@ -435,7 +439,7 @@ def init( \
         
         
         # get data
-        if gdat.datatype == 'inpt':
+        if gdat.typedata == 'inpt':
             
             # find flares
             maxmcorr, gdat.listindxtimeposimaxm, timetmpt = ephesus.util.find_flar(gdat.time, gdat.lcurdatathis, \
@@ -506,7 +510,7 @@ def init( \
         
         gdat.lcurdatavari = gdat.lcurdatastdvused**2
         
-        if gdat.datatype =='mock':
+        if gdat.typedata =='mock':
             if k < numbplotdraw:
                 dictpara = pars_para(gdat, paratrue[k, :])
                 plot_totl(gdat, k, lcurmodl, lcurmodlevol, lcurmodlspot, dictpara)
