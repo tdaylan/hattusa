@@ -71,7 +71,7 @@ def plot_totl(gdat, k, lcurmodl, lcurmodlevol, lcurmodlspot, dictpara):
     #axis.set_title(strgtitltotl)
     path = gdat.pathimag + 'lcurmodltotl%s_samp%06d_ns%02d.pdf' % (gdat.strgextn, k, gdat.numbspot)
     plt.subplots_adjust(top=0.7)
-    print(f'Writing to {path}...')
+    print('Writing to {path}...')
     plt.savefig(path)
     plt.close()
 
@@ -227,21 +227,21 @@ def init( \
          
          strgexpr='TESS', \
         
-         # output
+         # mock data
+         ## number of light curves to draw
+         numbplotdraw=100, \
+         # Boolean flag to write the generated mock data to disc
          boolwrit=False, \
-         
+
          # data processing
          # Boolean flag to bin the light curve
          boolbinnlcur=False, \
+         # Boolean flag to fit data
+         boolfitt=False, \
 
          # model
+         # Boolean flag to evolve the spots over time
          boolevol=False, \
-
-         # mock data
-         numbplotdraw=100, \
-
-         # Boolean flag to make data
-         boolfitt=False, \
 
          verbtype=1, \
 
@@ -284,11 +284,11 @@ def init( \
     # paths
     gdat.pathbase = os.environ['DATA'] + '/hattusa/'
     if gdat.typedata == 'mock':
-        strgdata = 'mock'
+        strgdata = '_mock'
     else:
         strgdata = ''
-    gdat.pathdata = gdat.pathbase + 'data/%s_%s/' % (gdat.typepopl, strgdata)
-    gdat.pathimag = gdat.pathbase + 'imag/%s_%s/' % (gdat.typepopl, strgdata)
+    gdat.pathdata = gdat.pathbase + 'data/%s%s/' % (strgdata, gdat.typepopl)
+    gdat.pathimag = gdat.pathbase + 'imag/%s%s/' % (strgdata, gdat.typepopl)
     gdat.pathdata = gdat.pathbase + 'data/mock/'
     os.system('mkdir -p %s' % gdat.pathdata)
     os.system('mkdir -p %s' % gdat.pathimag)
@@ -409,7 +409,7 @@ def init( \
             gdat.lcurdatastdv[k, :] = gdat.lcurdata[k, :] * 1e-3
         
             if k % 100 == 0:
-                print(f'{k} light curves have been generated.')
+                print('{k} light curves have been generated.')
         
         # write to FITS file
         if boolwrit:
@@ -418,214 +418,26 @@ def init( \
             hdunlcur = fits.ImageHDU(paratrue)
             listhdun = fits.HDUList([hdunprim, hduntrue, hdunlcur])
             strgtimestmp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            path = gdat.pathdata + f'lcur_{strgtimestmp}.fits'
-            print(f'Writing to {path}')
+            path = gdat.pathdata + 'lcur_{strgtimestmp}.fits'
+            print('Writing to {path}')
             listhdun.writeto(path, overwrite=True)
     
     gdat.boolexectmat = True
 
     for k in gdat.indxtarg:
         
+        if gdat.typedata =='mock':
+            if k < numbplotdraw:
+                dictpara = pars_para(gdat, paratrue[k, :])
+                plot_totl(gdat, k, lcurmodl, lcurmodlevol, lcurmodlspot, dictpara)
+        
         # call miletos to analyze data
         dictmile = miletos.init( \
                                 ticitarg=gdat.listticitarg[k], \
                                 typemodl='flar', \
                                 boolclip=False, \
+                                listtypemodlinfe=['spot'], \
                                 boolexectmat=gdat.boolexectmat, \
                                )
         
         
-        # get data
-        if gdat.typedata == 'inpt':
-            
-            # find flares
-            maxmcorr, gdat.listindxtimeposimaxm, timetmpt = ephesus.util.find_flar(gdat.time, gdat.lcurdatathis, \
-                                                                                            strgextn=gdat.strgextn, pathimag=gdat.pathimag, \
-                                                                                                               boolplot=True, verbtype=gdat.verbtype)
-            
-            numbkern = len(maxmcorr)
-            indxkern = np.arange(numbkern)
-            
-            # mask out flares
-            listindxtimemask = []
-            for k in indxkern:
-                for indxtime in gdat.listindxtimeposimaxm[k]:
-                    indxtimemask = np.arange(indxtime - 60, indxtime + 60)
-                    listindxtimemask.append(indxtimemask)
-            indxtimemask = np.concatenate(listindxtimemask)
-            indxtimemask = np.unique(indxtimemask)
-            indxtimegood = np.setdiff1d(np.arange(gdat.time.size), indxtimemask)
-            gdat.time = gdat.time[indxtimegood]
-            gdat.lcurdata = gdat.lcurdata[indxtimegood]
-            gdat.lcurdatastdv = gdat.lcurdatastdv[indxtimegood]
-            gdat.numbtime = gdat.time.size
-        
-        else:
-            strgtarg = 'mock%04d' % k
-            gdat.timethis = gdat.time
-            gdat.lcurdatathis = gdat.lcurdata[k, :]
-            gdat.lcurdatastdvthis = gdat.lcurdatastdv[k, :]
-        gdat.strgextn = '%s_%s' % (strgtarg, strgexpr)
-            
-        gdat.timeunbd = np.copy(gdat.timethis)
-        gdat.lcurdataunbd = np.copy(gdat.lcurdatathis)
-        gdat.lcurdatastdvunbd = np.copy(gdat.lcurdatastdvthis)
-        # bin down the data
-        if gdat.boolbind:
-            facttime = 200
-            print(f'Binning down the data along the time axis by a factor of {facttime} points...')
-            gdat.numbtimedown = gdat.numbtime // facttime
-            gdat.indxtimedown = np.arange(gdat.numbtimedown)
-            gdat.lcurdown = np.empty(gdat.numbtimedown)
-            gdat.lcurdownstdv = np.empty(gdat.numbtimedown)
-            gdat.meantimedown = np.empty(gdat.numbtimedown)
-            for t in gdat.indxtimedown:
-                indx = np.arange(t * facttime, (t+1) * facttime)
-                gdat.lcurdown[t] = np.mean(gdat.lcurdata[indx])
-                gdat.lcurdownstdv[t] = np.sqrt((np.mean(gdat.lcurdatastdv[indx])**2 + np.std(gdat.lcurdata[indx])**2)) / np.sqrt(indx.size)
-                gdat.meantimedown[t] = np.mean(gdat.time[indx]) 
-            
-            gdat.timebind = gdat.meantimedown
-            gdat.lcurdatabind = gdat.lcurdown
-            gdat.lcurdatastdvbind = gdat.lcurdownstdv
-            
-            gdat.numbtime = gdat.time.size
-        
-        else:
-            gdat.timebind = None
-            gdat.lcurdatabind = None
-            gdat.lcurdatastdvbind = None
-        
-        if gdat.boolbinnlcur:
-            gdat.timeused = gdat.timebind
-            gdat.lcurdataused = gdat.lcurdatabind
-            gdat.lcurdatastdvused = gdat.lcurdatastdvbind
-        else:
-            gdat.timeused = gdat.timeunbd
-            gdat.lcurdataused = gdat.lcurdataunbd
-            gdat.lcurdatastdvused = gdat.lcurdatastdvunbd
-        
-        gdat.lcurdatavari = gdat.lcurdatastdvused**2
-        
-        if gdat.typedata =='mock':
-            if k < numbplotdraw:
-                dictpara = pars_para(gdat, paratrue[k, :])
-                plot_totl(gdat, k, lcurmodl, lcurmodlevol, lcurmodlspot, dictpara)
-        # sample from the posterior
-        # plot light curve without the model
-        ephesus.util.plot_lcur(gdat.pathimag, timedata=gdat.time, lcurdata=gdat.lcurdataused, \
-                       timedatabind=gdat.timebind, lcurdatabind=gdat.lcurdataused, lcurdatastdvbind=gdat.lcurdatastdvused, strgextn=gdat.strgextn)
-        
-        arrylcur = np.empty((gdat.numbtime, 3))
-        arrylcur[:, 0] = gdat.time
-        arrylcur[:, 1] = gdat.lcurdataused
-        arrylcur[:, 2] = gdat.lcurdatastdvused
-        
-
-        if gdat.boolfitt:
-            # for each spot multiplicity, fit the spot model
-            for gdat.numbspot in listindxnumbspot:
-                
-                print('gdat.numbspot')
-                print(gdat.numbspot)
-
-                # list of parameter labels and units
-                listlablpara = [['$u_1$', ''], ['$u_2$', ''], ['$P$', 'days'], ['$i$', 'deg'], ['$\\rho$', ''], ['$C$', '']]
-                # list of parameter scalings
-                listscalpara = ['self', 'self', 'self', 'self', 'self', 'self']
-                # list of parameter minima
-                listminmpara = [-1., -1., 0.2,   0.,  0.,-1e-1]
-                # list of parameter maxima
-                listmaxmpara = [ 3.,  3., 0.4, 89.9, 0.6, 1e-1]
-                
-                for numbspottemp in range(gdat.numbspot):
-                    listlablpara += [['$\\theta_{%d}$' % numbspottemp, 'deg'], ['$\\phi_{%d}$' % numbspottemp, 'deg'], ['$R_{%d}$' % numbspottemp, '']]
-                    listscalpara += ['self', 'self', 'self']
-                    listminmpara += [-90.,   0.,  0.]
-                    listmaxmpara += [ 90., 360., 0.4]
-                    if gdat.boolevol:
-                        listlablpara += [['$T_{s;%d}$' % numbspottemp, 'day'], ['$\\sigma_{s;%d}$' % numbspottemp, '']]
-                        listscalpara += ['self', 'self']
-                        listminmpara += [gdat.minmtime, 0.1]
-                        listmaxmpara += [gdat.maxmtime, 20.]
-                        
-                listminmpara = np.array(listminmpara)
-                listmaxmpara = np.array(listmaxmpara)
-                listmeangauspara = None
-                liststdvgauspara = None
-                
-                # number of parameters
-                numbpara = len(listlablpara)
-                # number of walkers
-                numbwalk = max(20, 2 * numbpara)
-                    
-                numbdata = gdat.lcurdataused.size
-                
-                # number of degrees of freedom
-                gdat.numbdoff = numbdata - numbpara
-                
-                indxpara = np.arange(numbpara)
-
-                listpost = tdpy.mcmc.samp(gdat, gdat.pathimag, gdat.numbsampwalk, gdat.numbsampburnwalk, gdat.numbsampburnwalkseco, retr_llik, \
-                        listlablpara, listscalpara, listminmpara, listmaxmpara, listmeangauspara, liststdvgauspara, numbdata, boolpool=True, \
-                                #retr_lpri=retr_lpri, \
-                                strgextn=gdat.strgextn, samptype='emce')
-
-                # plot light curve
-                figr, axis = plt.subplots(figsize=(8, 4))
-                # plot samples from the posterior
-                ## the sample indices which will be plotted
-                gdat.numbsampplot = 10
-                indxsampplot = np.random.choice(gdat.indxsamp, size=gdat.numbsampplot, replace=False)
-                indxsampplot = np.sort(indxsampplot)
-                listlcurmodl = np.empty((gdat.numbsampplot, gdat.numbtime))
-                listlcurmodlevol = np.empty((gdat.numbsampplot, gdat.numbspot, gdat.numbtime))
-                listlcurmodlspot = np.empty((gdat.numbsampplot, gdat.numbspot, gdat.numbtime))
-                for kk, k in enumerate(indxsampplot):
-                    # calculate the model light curve for this parameter vector
-                    listlcurmodl[kk, :], listlcurmodlevol[kk, :, :], listlcurmodlspot[kk, :, :] = retr_modl(gdat, listpost[k, :])
-                    axis.plot(gdat.time, listlcurmodl[kk, :], color='b', alpha=0.1)
-                
-                # plot components of each sample
-                for kk, k in enumerate(indxsampplot):
-                    dictpara = pars_para(gdat, listpost[k, :])
-                    plot_totl(gdat, k, listlcurmodl[kk, :], listlcurmodlevol[kk, :, :], listlcurmodlspot[kk, :, :], dictpara)
-
-                # plot map
-                figr, axis = plt.subplots(figsize=(8, 4))
-                gdat.numbside = 2**10
-                
-                lati = np.empty((gdat.numbsamp, gdat.numbspot))
-                lngi = np.empty((gdat.numbsamp, gdat.numbspot))
-                rrat = np.empty((gdat.numbsamp, gdat.numbspot))
-                for n in gdat.indxsamp:
-                    dictpara = pars_para(gdat, listpost[n, :])
-                    lati[n, :] = dictpara['lati']
-                    lngi[n, :] = dictpara['lngi']
-                    rrat[n, :] = dictpara['rrat']
-                lati = np.median(lati, 0)
-                lngi = np.median(lngi, 0)
-                rrat = np.median(rrat, 0)
-
-                print('lati')
-                print(lati)
-                print('lngi')
-                print(lngi)
-                print('rrat')
-                print(rrat)
-                plot_moll(gdat, lati, lngi, rrat)
-                
-                #for k in indxsampplot:
-                #    lati = listpost[k, 1+0*gdat.numbparaspot+0]
-                #    lngi = listpost[k, 1+0*gdat.numbparaspot+1]
-                #    rrat = listpost[k, 1+0*gdat.numbparaspot+2]
-                #    plot_moll(gdat, lati, lngi, rrat)
-
-                for sp in ['right', 'top']:
-                    axis.spines[sp].set_visible(False)
-
-                path = gdat.pathimag + f'smap%s_ns%02d.pdf' % (strgtarg, gdat.numbspot)
-                print(f'Writing to {path}...')
-                plt.savefig(path)
-                plt.close()
-
