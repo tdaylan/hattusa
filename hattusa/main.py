@@ -29,6 +29,36 @@ import tdpy
 from tdpy import summgene
 import ephesus
 
+
+def retr_lcurflar(meantime, indxtime, listtimeflar, listamplflar, listscalrise, listscalfall):
+    
+    if meantime.size == 0:
+        raise Exception('')
+    
+    lcur = np.zeros_like(meantime)
+    numbflar = len(listtimeflar)
+    for k in np.arange(numbflar):
+        lcur += retr_lcurflarsing(meantime, listtimeflar[k], listamplflar[k], listscalrise[k], listscalfall[k])
+
+    return lcur
+
+
+def retr_lcurflarsing(meantime, timeflar, amplflar, scalrise, scalfall):
+    
+    numbtime = meantime.size
+    if numbtime == 0:
+        raise Exception('')
+    indxtime = np.arange(numbtime)
+    indxtimerise = np.where(meantime < timeflar)[0]
+    indxtimefall = np.setdiff1d(indxtime, indxtimerise)
+    lcur = np.empty_like(meantime)
+    lcur[indxtimerise] = np.exp((meantime[indxtimerise] - timeflar) / scalrise)
+    lcur[indxtimefall] = np.exp(-(meantime[indxtimefall] - timeflar) / scalfall)
+    lcur *= amplflar / np.amax(lcur) 
+    
+    return lcur
+
+
 def plot_totl(gdat, k, lcurmodl, lcurmodlevol, lcurmodlspot, dictpara):
     
     strgtitlstar = 'N=%d, u1=%.3g, u2=%.3g, i=%.3g deg, P=%.3g day' % (gdat.numbspot, dictpara['ldc1'], dictpara['ldc2'], \
@@ -69,7 +99,7 @@ def plot_totl(gdat, k, lcurmodl, lcurmodlevol, lcurmodlspot, dictpara):
         axis.text(0.5, 1.3 - 0.07 * (i + 1), liststrgtitlspot[i], color=gdat.listcolrspot[i], ha='center', transform=axis.transAxes)
     
     #axis.set_title(strgtitltotl)
-    path = gdat.pathimag + 'lcurmodltotl%s_samp%06d_ns%02d.pdf' % (gdat.strgextn, k, gdat.numbspot)
+    path = gdat.pathpopl + 'lcurmodltotl%s_samp%06d_ns%02d.pdf' % (gdat.strgextn, k, gdat.numbspot)
     plt.subplots_adjust(top=0.7)
     print('Writing to {path}...')
     plt.savefig(path)
@@ -287,12 +317,21 @@ def init( \
         strgdata = '_mock'
     else:
         strgdata = ''
-    gdat.pathdata = gdat.pathbase + 'data/%s%s/' % (strgdata, gdat.typepopl)
-    gdat.pathimag = gdat.pathbase + 'imag/%s%s/' % (strgdata, gdat.typepopl)
-    gdat.pathdata = gdat.pathbase + 'data/mock/'
-    os.system('mkdir -p %s' % gdat.pathdata)
-    os.system('mkdir -p %s' % gdat.pathimag)
+    gdat.pathimag = gdat.pathbase + 'imag/'
+    gdat.pathdata = gdat.pathbase + 'data/'
+    gdat.pathpopl = gdat.pathbase + gdat.typepopl + strgdata + '/'
+    gdat.pathimagpopl = gdat.pathpopl + 'imag/'
+    gdat.pathdatapopl = gdat.pathpopl + 'data/'
     
+    # make folders
+    for attr, valu in gdat.__dict__.items():
+        if attr.startswith('path'):
+            os.system('mkdir -p %s' % valu)
+    
+    dictmileinpt = dict()
+
+    dictmileinpt['pathbasetarg'] = gdat.pathpopl
+    dictmileinpt['boolsrchflar'] = True
     if gdat.boolfitt:
         ## number of samples per walker
         gdat.numbsampwalk = 1000
@@ -314,8 +353,6 @@ def init( \
         path = pathdatatess + 'listtargtsec/all_targets_S%03d_v1.csv' % 17
         objt = pd.read_csv(path, skiprows=5)
         gdat.listticitarg = objt['TICID'].values
-        print('gdat.listticitarg')
-        summgene(gdat.listticitarg)
         gdat.listticitarg = gdat.listticitarg[5:]
 
     if gdat.typedata == 'mock':
@@ -432,12 +469,13 @@ def init( \
                 plot_totl(gdat, k, lcurmodl, lcurmodlevol, lcurmodlspot, dictpara)
         
         # call miletos to analyze data
-        dictmile = miletos.init( \
+        dictmileoutp = miletos.init( \
                                 ticitarg=gdat.listticitarg[k], \
                                 typemodl='flar', \
                                 boolclip=False, \
                                 listtypemodlinfe=['spot'], \
                                 boolexectmat=gdat.boolexectmat, \
+                                **dictmileinpt, \
                                )
         
         
