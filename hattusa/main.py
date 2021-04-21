@@ -59,9 +59,9 @@ def retr_lcurflarsing(meantime, timeflar, amplflar, scalrise, scalfall):
     return lcur
 
 
-def plot_totl(gdat, k, lcurmodl, lcurmodlevol, lcurmodlspot, dictpara):
+def plot_totl(gdat, k, dictpara):
     
-    strgtitlstar = 'N=%d, u1=%.3g, u2=%.3g, i=%.3g deg, P=%.3g day' % (gdat.numbspot, dictpara['ldc1'], dictpara['ldc2'], \
+    strgtitlstar = 'N=%d, u1=%.3g, u2=%.3g, i=%.3g deg, P=%.3g day' % (gdat.listnumbspot[k], dictpara['ldc1'], dictpara['ldc2'], \
                                                                             dictpara['incl'], dictpara['prot'])
     strgtitlstar += ', $\\rho$=%.3g' % dictpara['shea']
     protlati = retr_protlati(dictpara['prot'], dictpara['shea'], dictpara['lati'])
@@ -71,10 +71,10 @@ def plot_totl(gdat, k, lcurmodl, lcurmodlevol, lcurmodlspot, dictpara):
     strgtitlstarspot = strgtitlstar
     strgtitltotl = strgtitlstar
     gdat.listcolrspot = ['g', 'r', 'orange', 'cyan', 'm', 'brown', 'violet', 'olive']
-    for i in range(gdat.numbspot):
+    for i in range(gdat.listnumbspot[k]):
         strgtitlspot = '$P_s$=%.3g day; $\\theta$=%.3g deg, $\\phi$=%.3g deg, $R_s$=%.3g' % \
                                                     (protlati[i], dictpara['lati'][i], dictpara['lngi'][i], dictpara['rrat'][i])
-        if gdat.boolevol:
+        if gdat.boolevolspot:
             strgtitlspot += ', $T_{s}$=%.3g day, $\\sigma_s$=%.3g day' % (dictpara['timecent'][i], dictpara['timestdv'][i])
         strgtitlstarspot = strgtitlstar + '\n' + strgtitlspot
         liststrgtitlspot.append(strgtitlspot)
@@ -82,26 +82,23 @@ def plot_totl(gdat, k, lcurmodl, lcurmodlevol, lcurmodlspot, dictpara):
         strgtitltotl += strgtitlspot
     
     figr, axis = plt.subplots(figsize=(8, 4))
-    for i in range(gdat.numbspot):
-        axis.plot(gdat.time, lcurmodlevol[i, :], color=gdat.listcolrspot[i], lw=3)
-        axis.plot(gdat.time, lcurmodlspot[i, :], color=gdat.listcolrspot[i], ls='--', alpha=0.3, lw=3)
+    for i in range(gdat.listnumbspot[k]):
+        axis.plot(gdat.time, gdat.lcurmodlevol[k][i, :], color=gdat.listcolrspot[i], lw=2)
+        axis.plot(gdat.time, gdat.lcurmodlspot[k][i, :], color=gdat.listcolrspot[i], ls='--', alpha=0.3, lw=2)
     ## raw data
-    axis.plot(gdat.timethis, gdat.lcurdataunbd, color='grey', ls='', marker='o', ms=0.5, rasterized=True)
-    # binned data
-    if gdat.boolbind:
-        axis.errorbar(gdat.timebind, gdat.lcurdatabind, yerr=gdat.lcurdatastdvbind, color='k', ls='', marker='o', ms=2)
+    axis.plot(gdat.time, gdat.lcurdata[k, :], color='grey', ls='', marker='o', ms=0.5, rasterized=True)
     # model
-    axis.plot(gdat.time, lcurmodl, color='b', lw=2)
+    axis.plot(gdat.time, gdat.lcurmodl[k], color='b', lw=3)
     axis.set_xlabel('Time [days]')
     axis.set_ylabel('Relative flux')
-    axis.text(0.5, 1.3, strgtitlstar, ha='center', transform=axis.transAxes)
-    for i in range(gdat.numbspot):
-        axis.text(0.5, 1.3 - 0.07 * (i + 1), liststrgtitlspot[i], color=gdat.listcolrspot[i], ha='center', transform=axis.transAxes)
     
-    #axis.set_title(strgtitltotl)
-    path = gdat.pathpopl + 'lcurmodltotl%s_samp%06d_ns%02d.pdf' % (gdat.strgextn, k, gdat.numbspot)
+    axis.text(0.5, 1.3, strgtitlstar, ha='center', transform=axis.transAxes)
+    for i in range(gdat.listnumbspot[k]):
+        axis.text(0.5, 1.3 - 0.1 * (i + 1), liststrgtitlspot[i], color=gdat.listcolrspot[i], ha='center', transform=axis.transAxes)
+    
+    path = gdat.pathpopl + 'lcurmodltotl%s_samp%06d_ns%02d.pdf' % (gdat.strgextn, k, gdat.listnumbspot[k])
     plt.subplots_adjust(top=0.7)
-    print('Writing to {path}...')
+    print('Writing to %s...' % path)
     plt.savefig(path)
     plt.close()
 
@@ -123,7 +120,7 @@ def retr_lpri(para, gdat):
 def retr_llik(para, gdat):
     
     # calculate the model light curve given the parameters
-    lcurmodl, lcurmodlevol, lcurmodlspot = retr_modl(gdat, para)
+    lcurmodl, lcurmodlevol, lcurmodlspot = retr_modl_spot(gdat, para)
     
     # calculate the log-likelihood
     llik = -0.5 * np.sum((gdat.lcurdata - lcurmodl)**2 / gdat.lcurdatavari)
@@ -147,7 +144,7 @@ def pars_para(gdat, para):
     dictpara['lati'] = para[indx+0]
     dictpara['lngi'] = para[indx+1]
     dictpara['rrat'] = para[indx+2]
-    if gdat.boolevol:
+    if gdat.boolevolspot:
         dictpara['timecent'] = para[indx+3]
         dictpara['timestdv'] = para[indx+4]
     
@@ -162,7 +159,7 @@ def pars_para(gdat, para):
     return dictpara
 
 
-def retr_modl(gdat, para):
+def retr_modl_spot(gdat, para):
     
     # parse the parameter vector
     ## rotation period
@@ -187,7 +184,7 @@ def retr_modl(gdat, para):
         lcurmodlspot[i, :] = gdat.objtstar.light_curve(dictpara['lngi'][i] * u.deg, dictpara['lati'][i] * u.deg, \
                                                                                         dictpara['rrat'][i], dictpara['incl'] * u.deg)[:, 0]
 
-        if gdat.boolevol:
+        if gdat.boolevolspot:
             # functional form of the spot evolution
             funcevol = np.exp(-0.5 * (gdat.time - dictpara['timecent'][i])**2 / dictpara['timestdv'][i]**2)
             
@@ -198,7 +195,7 @@ def retr_modl(gdat, para):
 
     # average the light curves from different spots
     lcurmodl = np.sum(lcurmodlevol, 0) + dictpara['cons'] - lcurmodlevol.shape[0] + 1.
-
+    
     return lcurmodl, lcurmodlevol, lcurmodlspot
 
     
@@ -251,7 +248,6 @@ def init( \
 
          # data
          ## Boolean flag to bin the data
-         boolbind=False, \
          boolbdtr=True, \
          durakernbdtrmedi=5., \
          
@@ -266,12 +262,10 @@ def init( \
          # data processing
          # Boolean flag to bin the light curve
          boolbinnlcur=False, \
-         # Boolean flag to fit data
-         boolfitt=False, \
 
          # model
          # Boolean flag to evolve the spots over time
-         boolevol=False, \
+         boolevolspot=False, \
 
          verbtype=1, \
 
@@ -308,7 +302,7 @@ def init( \
 
     # number of parameters per spot
     gdat.numbparaspot = 3
-    if gdat.boolevol:
+    if gdat.boolevolspot:
         gdat.numbparaspot += 2
     
     # paths
@@ -332,21 +326,10 @@ def init( \
 
     dictmileinpt['pathbasetarg'] = gdat.pathpopl
     dictmileinpt['boolsrchflar'] = True
-    if gdat.boolfitt:
-        ## number of samples per walker
-        gdat.numbsampwalk = 1000
-        ## number of samples to be burned in and not plotted
-        gdat.numbsampburnwalk = 0
-        ## number of samples to be burned in and plotted
-        gdat.numbsampburnwalkseco = int(0.9 * gdat.numbsampwalk)
         
-        # list of spot multiplicities to fit
-        listindxnumbspot = np.arange(3, 5)
+    # list of spot multiplicities to fit
+    listindxnumbspot = np.arange(3, 5)
    
-        # number of total samples after burn-in
-        gdat.numbsamp = (gdat.numbsampwalk - gdat.numbsampburnwalkseco) * numbwalk
-        gdat.indxsamp = np.arange(gdat.numbsamp)
-    
     # target selection
     if typepopl == 'sc17':
         pathdatatess = os.environ['TESS_DATA_PATH'] + '/data/'
@@ -359,14 +342,18 @@ def init( \
         gdat.numbtarg = 5
     else:
         gdat.numbtarg = len(gdat.listticitarg)
-        
+    
+    gdat.strgextn = '%s_%s' % (gdat.typedata, gdat.typepopl)
+    print('gdat.numbtarg')
+    print(gdat.numbtarg)
+
     gdat.indxtarg = np.arange(gdat.numbtarg)
 
     if gdat.typedata == 'mock':
         
         # number of spots
         maxmnumbspot = 4
-        listnumbspot = np.random.randint(1, maxmnumbspot, size=gdat.numbtarg)
+        gdat.listnumbspot = np.random.randint(1, maxmnumbspot, size=gdat.numbtarg)
         
         # limb darkening
         listldc1 = 0.3 + 0.1 * np.random.randn(gdat.numbtarg)
@@ -382,7 +369,7 @@ def init( \
         listshea = np.random.rand(gdat.numbtarg) * 0.9 + 0.1
         
         paratrue = np.empty((gdat.numbtarg, maxmnumbspot * gdat.numbparaspot + gdat.numbparastartrue))
-        paratrue[:, 0] = listnumbspot
+        paratrue[:, 0] = gdat.listnumbspot
         paratrue[:, 1] = listldc1
         paratrue[:, 2] = listldc2
         paratrue[:, 3] = listprot
@@ -399,54 +386,60 @@ def init( \
         gdat.lcurdata = np.empty((gdat.numbtarg, gdat.numbtime))
         gdat.lcurdatastdv = np.empty((gdat.numbtarg, gdat.numbtime))
         liststrgtarg = []
+        
+        gdat.lcurmodl = [[] for k in gdat.indxtarg]
+        gdat.lcurmodlspot = [[] for k in gdat.indxtarg]
+        gdat.lcurmodlevol = [[] for k in gdat.indxtarg]
         for k in gdat.indxtarg:
+            gdat.numbspot = gdat.listnumbspot[k]
+            gdat.lcurmodl[k] = np.empty(gdat.numbtime)
+            gdat.lcurmodlspot[k] = np.empty((gdat.numbspot, gdat.numbtime))
+            gdat.lcurmodlevol[k] = np.empty((gdat.numbspot, gdat.numbtime))
             liststrgtarg.append('targ%08d' % k)
-            gdat.numbspot = listnumbspot[k]
 
-            indxspot = np.arange(listnumbspot[k])
+            indxspot = np.arange(gdat.listnumbspot[k])
             
             # latitude
-            listlati = np.random.rand(listnumbspot[k]) * 180. - 90.
+            listlati = np.random.rand(gdat.listnumbspot[k]) * 180. - 90.
         
             # longitude
-            listlngi = np.random.rand(listnumbspot[k]) * 360.
+            listlngi = np.random.rand(gdat.listnumbspot[k]) * 360.
         
             # radius
-            listrrat = np.random.rand(listnumbspot[k]) * 0.15 + 0.05
+            listrrat = np.random.rand(gdat.listnumbspot[k]) * 0.15 + 0.05
         
-            if gdat.boolevol:
+            if gdat.boolevolspot:
                 # central time of evolution
-                listtimecent = np.random.rand(listnumbspot[k]) * (maxmtime - minmtime) + minmtime
+                listtimecent = np.random.rand(gdat.listnumbspot[k]) * (maxmtime - minmtime) + minmtime
         
                 # width of time evolution
-                listtimestdv = listprot[k] * (np.random.rand(listnumbspot[k]) * 2. + 1.)
+                listtimestdv = listprot[k] * (np.random.rand(gdat.listnumbspot[k]) * 2. + 1.)
             
             for i in range(gdat.numbspot):
                 indx = gdat.numbparastartrue + np.arange(gdat.numbspot) * gdat.numbparaspot
                 paratrue[k, indx+0] = listlati
                 paratrue[k, indx+1] = listlngi
                 paratrue[k, indx+2] = listrrat
-                if gdat.boolevol:
+                if gdat.boolevolspot:
                     paratrue[k, indx+3] = listtimecent
                     paratrue[k, indx+4] = listtimestdv
             
             # get model light curve and its components
-            lcurmodl, lcurmodlevol, lcurmodlspot = retr_modl(gdat, paratrue[k, 1:])
+            gdat.lcurmodl[k], gdat.lcurmodlevol[k], gdat.lcurmodlspot[k] = retr_modl_spot(gdat, paratrue[k, 1:])
 
             # add white noise to the overall light curve to get the synthetic data
-            gdat.lcurdata[k, :] = lcurmodl + np.random.randn(gdat.numbtime) * 1e-4
+            gdat.lcurdata[k, :] = gdat.lcurmodl[k] + np.random.randn(gdat.numbtime) * 1e-4
             
             # add red noise
             sigm = np.random.rand() * 0.0005
             rhoo = np.random.rand() * 9. + 1.
             logtsigm = np.log(sigm)
             logtrhoo = np.log(rhoo)
-            noisredd = retr_noisredd(gdat.time, logtsigm, logtrhoo)
-            gdat.lcurdata[k, :] += noisredd
-            gdat.lcurdatastdv[k, :] = gdat.lcurdata[k, :] * 1e-3
+            #noisredd = retr_noisredd(gdat.time, logtsigm, logtrhoo)
+            #gdat.lcurdata[k, :] += noisredd
+            #gdat.lcurdatastdv[k, :] = gdat.lcurdata[k, :] * 1e-3
         
-            if k % 100 == 0:
-                print('{k} light curves have been generated.')
+        print('%d light curves have been generated.' % gdat.numbtarg)
         
         # write to FITS file
         if boolwrit:
@@ -456,7 +449,7 @@ def init( \
             listhdun = fits.HDUList([hdunprim, hduntrue, hdunlcur])
             strgtimestmp = datetime.now().strftime('%Y%m%d_%H%M%S')
             path = gdat.pathdata + 'lcur_{strgtimestmp}.fits'
-            print('Writing to {path}')
+            print('Writing to %s...' % path)
             listhdun.writeto(path, overwrite=True)
     
     gdat.boolexectmat = True
@@ -465,9 +458,32 @@ def init( \
         
         if gdat.typedata =='mock':
             if k < numbplotdraw:
+                gdat.numbspot = gdat.listnumbspot[k]
                 dictpara = pars_para(gdat, paratrue[k, :])
-                plot_totl(gdat, k, lcurmodl, lcurmodlevol, lcurmodlspot, dictpara)
+                plot_totl(gdat, k, dictpara)
+            
+                # plot
+                #dictmodl = dict()
+                #dictmodl['modltotl'] = {'lcur': lcurmodl[:, nn], 'time': gdat.time[n]}
+                #dictmodl['modlevol'] = {'lcur': lcurmodlevol[:, nn], 'time': gdat.time[n]}
+                #dictmodl['modlspot'] = {'lcur': lcurmodlspot[:, nn], 'time': gdat.time[n]}
+                #strgextn = '%s_%s' % (gdat.typedata, gdat.strgtarg[n])
+                #titl = 'P=%.3g day, M=%.3g M$_\odot$, Tmag=%.3g' % (gdat.trueperi[gdat.indxreletrue[n]], \
+                #                                                gdat.truemasscomp[gdat.indxreletrue[n]], gdat.truetmag[gdat.indxreletrue[n]])
+                #ephesus.plot_lcur(gdat.pathtargimag[n], dictmodl=dictmodl, timedata=gdat.time[n], titl=titl, \
+                #                                                                lcurdata=gdat.rflx[n], boolwritover=gdat.boolwritplotover, \
+                #                                                                                                           strgextn=strgextn)
+                #nn += 1
+
         
+        arry = np.empty((gdat.numbtime, 3))
+        arry[:, 0] = gdat.time 
+        arry[:, 1] = gdat.lcurdata[k, :]
+        arry[:, 1] = gdat.lcurdatastdv[k, :]
+        listarrytser = dict()
+        listarrytser['raww'] = [[[]], []]
+        listarrytser['raww'][0][0] = arry
+
         # call miletos to analyze data
         dictmileoutp = miletos.init( \
                                 ticitarg=gdat.listticitarg[k], \

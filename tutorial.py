@@ -20,7 +20,7 @@ def cnfg_mockcplxrota():
    
     boolfitt = False
     hattusa.init( \
-                 boolfitt=boolfitt, \
+                 typedata='mock', \
                 )
 
 
