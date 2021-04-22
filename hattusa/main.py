@@ -96,7 +96,7 @@ def plot_totl(gdat, k, dictpara):
     for i in range(gdat.listnumbspot[k]):
         axis.text(0.5, 1.3 - 0.1 * (i + 1), liststrgtitlspot[i], color=gdat.listcolrspot[i], ha='center', transform=axis.transAxes)
     
-    path = gdat.pathpopl + 'lcurmodltotl%s_samp%06d_ns%02d.pdf' % (gdat.strgextn, k, gdat.listnumbspot[k])
+    path = gdat.pathimagpopl + 'lcurmodltotl%s_samp%06d_ns%02d.pdf' % (gdat.strgextn, k, gdat.listnumbspot[k])
     plt.subplots_adjust(top=0.7)
     print('Writing to %s...' % path)
     plt.savefig(path)
@@ -307,13 +307,9 @@ def init( \
     
     # paths
     gdat.pathbase = os.environ['DATA'] + '/hattusa/'
-    if gdat.typedata == 'mock':
-        strgdata = '_mock'
-    else:
-        strgdata = ''
     gdat.pathimag = gdat.pathbase + 'imag/'
     gdat.pathdata = gdat.pathbase + 'data/'
-    gdat.pathpopl = gdat.pathbase + gdat.typepopl + strgdata + '/'
+    gdat.pathpopl = gdat.pathbase + gdat.typepopl + '_' + gdat.typedata + '/'
     gdat.pathimagpopl = gdat.pathpopl + 'imag/'
     gdat.pathdatapopl = gdat.pathpopl + 'data/'
     
