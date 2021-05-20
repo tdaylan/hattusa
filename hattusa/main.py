@@ -13,37 +13,51 @@ from scipy import signal
 from scipy.optimize import rosen, shgo
 
 import fleck
-import lightkurve
-
-import celerite
-from celerite import terms
-
-import healpy as hp
 
 import astropy.units as u
 from astropy.io import fits
 from astropy.coordinates import SkyCoord
 
+x = np.arange(10)
+figrsizeydob = [8., 4.]
+figr, axis = plt.subplots(figsize=figrsizeydob)
+axis.plot(x, x)
+axis.set_ylabel('Flux')
+axis.set_xlabel('Time [BJD]')
+plt.savefig('/Users/tdaylan/Desktop/test2.pdf')
+plt.close()
+            
 import miletos
 import tdpy
 from tdpy import summgene
 import ephesus
 
+import matplotlib.pyplot as plt
+import numpy as np
+x = np.arange(10)
+figrsizeydob = [8., 4.]
+figr, axis = plt.subplots(figsize=figrsizeydob)
+axis.plot(x, x)
+axis.set_ylabel('Flux')
+axis.set_xlabel('Time [BJD]')
+plt.savefig('/Users/tdaylan/Desktop/test9.pdf')
+plt.close()
+            
+import pcat
 
-def retr_lcurflar(meantime, indxtime, listtimeflar, listamplflar, listscalrise, listscalfall):
-    
-    if meantime.size == 0:
-        raise Exception('')
-    
-    lcur = np.zeros_like(meantime)
-    numbflar = len(listtimeflar)
-    for k in np.arange(numbflar):
-        lcur += retr_lcurflarsing(meantime, listtimeflar[k], listamplflar[k], listscalrise[k], listscalfall[k])
+import matplotlib.pyplot as plt
+import numpy as np
+x = np.arange(10)
+figrsizeydob = [8., 4.]
+figr, axis = plt.subplots(figsize=figrsizeydob)
+axis.plot(x, x)
+axis.set_ylabel('Flux')
+axis.set_xlabel('Time [BJD]')
+plt.savefig('/Users/tdaylan/Desktop/test10.pdf')
+plt.close()
+            
 
-    return lcur
-
-
-def retr_lcurflarsing(meantime, timeflar, amplflar, scalrise, scalfall):
+def retr_lcurmodl_flarsing(meantime, timeflar, amplflar, scalrise, scalfall):
     
     numbtime = meantime.size
     if numbtime == 0:
@@ -83,12 +97,12 @@ def plot_totl(gdat, k, dictpara):
     
     figr, axis = plt.subplots(figsize=(8, 4))
     for i in range(gdat.listnumbspot[k]):
-        axis.plot(gdat.time, gdat.lcurmodlevol[k][i, :], color=gdat.listcolrspot[i], lw=2)
-        axis.plot(gdat.time, gdat.lcurmodlspot[k][i, :], color=gdat.listcolrspot[i], ls='--', alpha=0.3, lw=2)
+        axis.plot(gdat.timethis, gdat.lcurmodlevol[k][i, :], color=gdat.listcolrspot[i], lw=2)
+        axis.plot(gdat.timethis, gdat.lcurmodlspot[k][i, :], color=gdat.listcolrspot[i], ls='--', alpha=0.3, lw=2)
     ## raw data
-    axis.plot(gdat.time, gdat.lcurdata[k, :], color='grey', ls='', marker='o', ms=0.5, rasterized=True)
+    axis.plot(gdat.timethis, gdat.lcurdata[k], color='grey', ls='', marker='o', ms=0.5, rasterized=True)
     # model
-    axis.plot(gdat.time, gdat.lcurmodl[k], color='b', lw=3)
+    axis.plot(gdat.timethis, gdat.lcurmodl[k], color='b', lw=3)
     axis.set_xlabel('Time [days]')
     axis.set_ylabel('Relative flux')
     
@@ -96,7 +110,7 @@ def plot_totl(gdat, k, dictpara):
     for i in range(gdat.listnumbspot[k]):
         axis.text(0.5, 1.3 - 0.1 * (i + 1), liststrgtitlspot[i], color=gdat.listcolrspot[i], ha='center', transform=axis.transAxes)
     
-    path = gdat.pathimagpopl + 'lcurmodltotl%s_samp%06d_ns%02d.pdf' % (gdat.strgextn, k, gdat.listnumbspot[k])
+    path = gdat.pathimagpopl + 'lcurmodltotl%s_targ%06d_ns%02d.pdf' % (gdat.strgextn, k, gdat.listnumbspot[k])
     plt.subplots_adjust(top=0.7)
     print('Writing to %s...' % path)
     plt.savefig(path)
@@ -120,10 +134,10 @@ def retr_lpri(para, gdat):
 def retr_llik(para, gdat):
     
     # calculate the model light curve given the parameters
-    lcurmodl, lcurmodlevol, lcurmodlspot = retr_modl_spot(gdat, para)
+    lcurmodl, lcurmodlevol, lcurmodlspot, lcurmodlflar = retr_lcurmodl_spotflar(gdat, para)
     
     # calculate the log-likelihood
-    llik = -0.5 * np.sum((gdat.lcurdata - lcurmodl)**2 / gdat.lcurdatavari)
+    llik = -0.5 * np.sum((gdat.lcurdatathis - lcurmodl)**2 / gdat.lcurdatavarithis)
     
     return llik
 
@@ -148,6 +162,15 @@ def pars_para(gdat, para):
         dictpara['timecent'] = para[indx+3]
         dictpara['timestdv'] = para[indx+4]
     
+    cntr = np.amax(indx) + 5
+    indx = gdat.numbparastar + cntr + np.arange(gdat.numbflar) * gdat.numbparaflar
+    
+    dictpara['timeflar'] = para[indx+0]
+    dictpara['amplflar'] = para[indx+1]
+    dictpara['scalrise'] = para[indx+2]
+    dictpara['scalfall'] = para[indx+3]
+    
+
     if (dictpara['lati'] > 90).any() or (dictpara['lati'] < -90).any():
         print('pars_para()')
         print('dictpara')
@@ -159,7 +182,7 @@ def pars_para(gdat, para):
     return dictpara
 
 
-def retr_modl_spot(gdat, para):
+def retr_lcurmodl_spotflar(gdat, para):
     
     # parse the parameter vector
     ## rotation period
@@ -169,13 +192,14 @@ def retr_modl_spot(gdat, para):
     
     lcurmodlspot = np.empty((gdat.numbspot, gdat.numbtime))
     lcurmodlevol = np.empty((gdat.numbspot, gdat.numbtime))
+    lcurmodlflar = np.empty(gdat.numbtime)
     for i in range(gdat.numbspot):
 
         # rotation period at the spot's latitude
         protlati = retr_protlati(dictpara['prot'], dictpara['shea'], dictpara['lati'][i])
     
         # construct the phase grid for this spot
-        phas = 360. * gdat.time / protlati
+        phas = 360. * gdat.timethis / protlati
         
         # construct the fleck star object 
         gdat.objtstar = fleck.Star(spot_contrast=gdat.contspot, phases=phas, u_ld=ldcv)
@@ -196,7 +220,15 @@ def retr_modl_spot(gdat, para):
     # average the light curves from different spots
     lcurmodl = np.sum(lcurmodlevol, 0) + dictpara['cons'] - lcurmodlevol.shape[0] + 1.
     
-    return lcurmodl, lcurmodlevol, lcurmodlspot
+    numbflar = len(dictpara['timeflar'])
+    lcurmodlflar = np.zeros_like(lcurmodl)
+    for i in range(numbflar):
+        lcurmodlflar += retr_lcurmodl_flarsing(gdat.timethis, dictpara['timeflar'][i], \
+                                        dictpara['amplflar'][i], dictpara['scalrise'][i], dictpara['scalfall'][i])
+    
+    lcurmodl += lcurmodlflar
+
+    return lcurmodl, lcurmodlevol, lcurmodlspot, lcurmodlflar
 
     
 def retr_protlati(prot, shea, lati):
@@ -225,21 +257,6 @@ def plot_moll(gdat, lati, lngi, rrat):
     hp.graticule(color='silver')
 
 
-def retr_noisredd(time, logtsigm, logtrhoo):
-    
-    # set up a simple celerite model
-    objtkern = celerite.terms.Matern32Term(logtsigm, logtrhoo)
-    objtgpro = celerite.GP(objtkern)
-    
-    # simulate K datasets with N points
-    objtgpro.compute(time)
-    
-    #y = objtgpro.sample(size=1)
-    y = objtgpro.sample()
-    
-    return y[0]
-
-
 def init( \
          # type of population
          typepopl='sc17', \
@@ -250,7 +267,9 @@ def init( \
          ## Boolean flag to bin the data
          boolbdtr=True, \
          durakernbdtrmedi=5., \
-         
+         # type of the simulated phenomenon for mock data
+         typemodltrue='spotflar', \
+
          strgexpr='TESS', \
         
          # mock data
@@ -298,8 +317,10 @@ def init( \
     ## number of parameters per star
     dictparaspot['numbparastar'] = gdat.numbparastar
     
-    gdat.numbparastartrue = gdat.numbparastar + 1
+    gdat.numbparastartrue = gdat.numbparastar + 2
 
+    # number of parameters per flare
+    gdat.numbparaflar = 4
     # number of parameters per spot
     gdat.numbparaspot = 3
     if gdat.boolevolspot:
@@ -333,6 +354,10 @@ def init( \
         objt = pd.read_csv(path, skiprows=5)
         gdat.listticitarg = objt['TICID'].values
         gdat.listticitarg = gdat.listticitarg[5:]
+    elif typepopl == 'tyr1':
+        gdat.listticitarg = np.array([25118964])
+    elif typepopl == 'simp':
+        pass
 
     if gdat.typedata == 'mock':
         gdat.numbtarg = 5
@@ -344,87 +369,125 @@ def init( \
     print(gdat.numbtarg)
 
     gdat.indxtarg = np.arange(gdat.numbtarg)
-
+    
+    gdat.time = [[] for k in gdat.indxtarg]
     if gdat.typedata == 'mock':
-        
-        # number of spots
-        maxmnumbspot = 4
-        gdat.listnumbspot = np.random.randint(1, maxmnumbspot, size=gdat.numbtarg)
-        
-        # limb darkening
-        listldc1 = 0.3 + 0.1 * np.random.randn(gdat.numbtarg)
-        listldc2 = 0.3 + 0.1 * np.random.randn(gdat.numbtarg)
-        
-        # rotational period
-        listprot = np.random.rand(gdat.numbtarg) * 20. + 20.
-        
-        # inclinations
-        listincl = np.random.rand(gdat.numbtarg) * 90. - 90.
-        
-        # rate of differential rotation (shear)
-        listshea = np.random.rand(gdat.numbtarg) * 0.9 + 0.1
-        
-        paratrue = np.empty((gdat.numbtarg, maxmnumbspot * gdat.numbparaspot + gdat.numbparastartrue))
-        paratrue[:, 0] = gdat.listnumbspot
-        paratrue[:, 1] = listldc1
-        paratrue[:, 2] = listldc2
-        paratrue[:, 3] = listprot
-        paratrue[:, 4] = listincl
-        paratrue[:, 5] = listshea
-        paratrue[:, 6] = 0.
         
         # time axis
         gdat.numbtime = 1080
         minmtime = 0.
         maxmtime = 180. * 6. * 1. / 6.
-        gdat.time = np.linspace(minmtime, maxmtime, gdat.numbtime)
+            
+        gdat.lcurdata = [np.empty(gdat.numbtime) for k in gdat.indxtarg]
+        gdat.lcurdatastdv = [np.empty(gdat.numbtime) for k in gdat.indxtarg]
+        gdat.lcurmodl = [np.empty(gdat.numbtime) for k in gdat.indxtarg]
         
-        gdat.lcurdata = np.empty((gdat.numbtarg, gdat.numbtime))
-        gdat.lcurdatastdv = np.empty((gdat.numbtarg, gdat.numbtime))
-        liststrgtarg = []
-        
-        gdat.lcurmodl = [[] for k in gdat.indxtarg]
-        gdat.lcurmodlspot = [[] for k in gdat.indxtarg]
-        gdat.lcurmodlevol = [[] for k in gdat.indxtarg]
         for k in gdat.indxtarg:
-            gdat.numbspot = gdat.listnumbspot[k]
-            gdat.lcurmodl[k] = np.empty(gdat.numbtime)
-            gdat.lcurmodlspot[k] = np.empty((gdat.numbspot, gdat.numbtime))
-            gdat.lcurmodlevol[k] = np.empty((gdat.numbspot, gdat.numbtime))
-            liststrgtarg.append('targ%08d' % k)
+            gdat.time[k] = np.linspace(minmtime, maxmtime, gdat.numbtime)
+            
+        if gdat.typemodltrue == 'spotflar':
+            # number of spots
+            maxmnumbflar = 20
+            gdat.listnumbflar = np.random.randint(1, maxmnumbflar, size=gdat.numbtarg)
+            
+            # number of spots
+            maxmnumbspot = 4
+            gdat.listnumbspot = np.random.randint(1, maxmnumbspot, size=gdat.numbtarg)
+            
+            # limb darkening
+            listldc1 = 0.3 + 0.1 * np.random.randn(gdat.numbtarg)
+            listldc2 = 0.3 + 0.1 * np.random.randn(gdat.numbtarg)
+            
+            # rotational period
+            listprot = np.random.rand(gdat.numbtarg) * 20. + 20.
+            
+            # inclinations
+            listincl = np.random.rand(gdat.numbtarg) * 90. - 90.
+            
+            # rate of differential rotation (shear)
+            listshea = np.random.rand(gdat.numbtarg) * 0.9 + 0.1
+            
+            numbparatrue = maxmnumbspot * gdat.numbparaspot + maxmnumbflar * gdat.numbparaflar + gdat.numbparastartrue
+            paratrue = np.empty((gdat.numbtarg, numbparatrue))
+            paratrue[:, 0] = gdat.listnumbspot
+            paratrue[:, 1] = gdat.listnumbflar
+            paratrue[:, 2] = listldc1
+            paratrue[:, 3] = listldc2
+            paratrue[:, 4] = listprot
+            paratrue[:, 5] = listincl
+            paratrue[:, 6] = listshea
+            paratrue[:, 7] = 0.
+            
+            gdat.lcurmodlspot = [[] for k in gdat.indxtarg]
+            gdat.lcurmodlevol = [[] for k in gdat.indxtarg]
+            gdat.lcurmodlflar = [[] for k in gdat.indxtarg]
+            for k in gdat.indxtarg:
+                
+                gdat.timethis = gdat.time[k]
+                
+                print('gdat.timethis')
+                summgene(gdat.timethis)
+                
+                gdat.numbspot = gdat.listnumbspot[k]
+                gdat.numbflar = gdat.listnumbflar[k]
+                gdat.lcurmodlspot[k] = np.empty((gdat.numbspot, gdat.numbtime))
+                gdat.lcurmodlevol[k] = np.empty((gdat.numbspot, gdat.numbtime))
 
-            indxspot = np.arange(gdat.listnumbspot[k])
+                indxspot = np.arange(gdat.listnumbspot[k])
+                
+                # latitude
+                listlati = np.random.rand(gdat.listnumbspot[k]) * 180. - 90.
             
-            # latitude
-            listlati = np.random.rand(gdat.listnumbspot[k]) * 180. - 90.
-        
-            # longitude
-            listlngi = np.random.rand(gdat.listnumbspot[k]) * 360.
-        
-            # radius
-            listrrat = np.random.rand(gdat.listnumbspot[k]) * 0.15 + 0.05
-        
-            if gdat.boolevolspot:
-                # central time of evolution
-                listtimecent = np.random.rand(gdat.listnumbspot[k]) * (maxmtime - minmtime) + minmtime
-        
-                # width of time evolution
-                listtimestdv = listprot[k] * (np.random.rand(gdat.listnumbspot[k]) * 2. + 1.)
+                # longitude
+                listlngi = np.random.rand(gdat.listnumbspot[k]) * 360.
             
-            for i in range(gdat.numbspot):
-                indx = gdat.numbparastartrue + np.arange(gdat.numbspot) * gdat.numbparaspot
-                paratrue[k, indx+0] = listlati
-                paratrue[k, indx+1] = listlngi
-                paratrue[k, indx+2] = listrrat
+                # radius
+                listrrat = np.random.rand(gdat.listnumbspot[k]) * 0.15 + 0.05
+            
                 if gdat.boolevolspot:
-                    paratrue[k, indx+3] = listtimecent
-                    paratrue[k, indx+4] = listtimestdv
+                    # central time of evolution
+                    listtimecent = np.random.rand(gdat.listnumbspot[k]) * (maxmtime - minmtime) + minmtime
             
-            # get model light curve and its components
-            gdat.lcurmodl[k], gdat.lcurmodlevol[k], gdat.lcurmodlspot[k] = retr_modl_spot(gdat, paratrue[k, 1:])
+                    # width of time evolution
+                    listtimestdv = listprot[k] * (np.random.rand(gdat.listnumbspot[k]) * 2. + 1.)
+                
+                # time stamps of the flares
+                listtimeflar = minmtime + (maxmtime - minmtime) * np.random.rand(gdat.listnumbflar[k])
+            
+                # amplitudes of the flares
+                listamplflar = tdpy.icdf_powr(np.random.rand(gdat.listnumbflar[k]), 1e-6, 1e-2, -2.)
+            
+                # rise time scales of the flares
+                listscalrise = pcat.icdf_gaus(np.random.rand(gdat.listnumbflar[k]), 4. / 24. / 60., 0.4 / 24. / 60.)
+            
+                # fall time scales of the flares
+                listscalfall = pcat.icdf_gaus(np.random.rand(gdat.listnumbflar[k]), 40. / 24. / 60., 4. / 24. / 60.)
+                
+                cntr = 8
+                for i in range(gdat.numbspot):
+                    indx = np.arange(gdat.numbspot) * gdat.numbparaspot
+                    paratrue[k, cntr+indx+0] = listlati
+                    paratrue[k, cntr+indx+1] = listlngi
+                    paratrue[k, cntr+indx+2] = listrrat
+                    cntr += 3
+                    if gdat.boolevolspot:
+                        paratrue[k, cntr+indx+3] = listtimecent
+                        paratrue[k, cntr+indx+4] = listtimestdv
+                        cntr += 2
+                for i in range(gdat.numbflar):
+                    indx = cntr + np.arange(gdat.numbflar) * gdat.numbparaflar
+                    paratrue[k, cntr+indx+0] = listtimeflar
+                    paratrue[k, cntr+indx+1] = listamplflar
+                    paratrue[k, cntr+indx+2] = listscalrise
+                    paratrue[k, cntr+indx+3] = listscalfall
+                
+                # get model light curve and its components
+                gdat.lcurmodl[k], gdat.lcurmodlevol[k], gdat.lcurmodlspot[k], gdat.lcurmodlflar[k] = retr_lcurmodl_spotflar(gdat, paratrue[k, 1:])
 
+        for k in gdat.indxtarg:
+            
             # add white noise to the overall light curve to get the synthetic data
-            gdat.lcurdata[k, :] = gdat.lcurmodl[k] + np.random.randn(gdat.numbtime) * 1e-4
+            gdat.lcurdata[k] = gdat.lcurmodl[k] + np.random.randn(gdat.numbtime) * 1e-4
             
             # add red noise
             sigm = np.random.rand() * 0.0005
@@ -449,44 +512,67 @@ def init( \
             listhdun.writeto(path, overwrite=True)
     
     gdat.boolexectmat = True
-
+    
+    gdat.strgtarg = np.empty(gdat.numbtarg, dtype=object)
     for k in gdat.indxtarg:
         
-        if gdat.typedata =='mock':
+        if gdat.typedata == 'mock':
             if k < numbplotdraw:
                 gdat.numbspot = gdat.listnumbspot[k]
-                dictpara = pars_para(gdat, paratrue[k, :])
+                gdat.numbflar = gdat.listnumbflar[k]
+                dictpara = pars_para(gdat, paratrue[k, 2:])
                 plot_totl(gdat, k, dictpara)
             
+                gdat.strgtarg[k] = 'targ%06d' % k
+                
                 # plot
-                #dictmodl = dict()
-                #dictmodl['modltotl'] = {'lcur': lcurmodl[:, nn], 'time': gdat.time[n]}
-                #dictmodl['modlevol'] = {'lcur': lcurmodlevol[:, nn], 'time': gdat.time[n]}
-                #dictmodl['modlspot'] = {'lcur': lcurmodlspot[:, nn], 'time': gdat.time[n]}
-                #strgextn = '%s_%s' % (gdat.typedata, gdat.strgtarg[n])
-                #titl = 'P=%.3g day, M=%.3g M$_\odot$, Tmag=%.3g' % (gdat.trueperi[gdat.indxreletrue[n]], \
-                #                                                gdat.truemasscomp[gdat.indxreletrue[n]], gdat.truetmag[gdat.indxreletrue[n]])
-                #ephesus.plot_lcur(gdat.pathtargimag[n], dictmodl=dictmodl, timedata=gdat.time[n], titl=titl, \
-                #                                                                lcurdata=gdat.rflx[n], boolwritover=gdat.boolwritplotover, \
-                #                                                                                                           strgextn=strgextn)
-                #nn += 1
-
+                dictmodl = dict()
+                dictmodl['modltotl'] = {'lcur': gdat.lcurmodl[k], 'time': gdat.time[k]}
+                for i in np.arange(gdat.numbspot):
+                    dictmodl['modlevolsp%02d' % i] = {'lcur': gdat.lcurmodlevol[k][i, :], 'time': gdat.time[k]}
+                    dictmodl['modlspotsp%02d' % i] = {'lcur': gdat.lcurmodlspot[k][i, :], 'time': gdat.time[k]}
+                dictmodl['modlflar'] = {'lcur': gdat.lcurmodlflar[k], 'time': gdat.time[k]}
+                strgextn = '%s_%s' % (gdat.typedata, gdat.strgtarg[k])
+                ephesus.plot_lcur(gdat.pathimagpopl, dictmodl=dictmodl, timedata=gdat.time[k], lcurdata=gdat.lcurdata[k], strgextn=strgextn)
         
-        arry = np.empty((gdat.numbtime, 3))
-        arry[:, 0] = gdat.time 
-        arry[:, 1] = gdat.lcurdata[k, :]
-        arry[:, 1] = gdat.lcurdatastdv[k, :]
-        listarrytser = dict()
-        listarrytser['raww'] = [[[]], []]
-        listarrytser['raww'][0][0] = arry
+        if gdat.typedata == 'real':
+            listarrytser = None
+        
+            ticitarg = gdat.listticitarg[k]
+            
+            labltarg = None
+        else:
+            arry = np.empty((gdat.numbtime, 3))
+            arry[:, 0] = gdat.time[k] 
+            arry[:, 1] = gdat.lcurdata[k]
+            arry[:, 2] = gdat.lcurdatastdv[k]
+            listarrytser = dict()
+            listarrytser['raww'] = [[[[]]], [[[]]]]
+            listarrytser['raww'][0][0][0] = arry
 
+            if gdat.typepopl == 'simp':
+                ticitarg = None
+                labltarg = 'Mock target %d' % k
+            else:
+                ticitarg = gdat.listticitarg[k]
+                labltarg = None
+
+        dictlcurtessinpt = dict()
+        dictlcurtessinpt['boolspoconly'] = True
+        
         # call miletos to analyze data
         dictmileoutp = miletos.init( \
-                                ticitarg=gdat.listticitarg[k], \
-                                typemodl='flar', \
+                                ticitarg=ticitarg, \
+                                listarrytser=listarrytser, \
+                                labltarg=labltarg, \
+                                listtypeanls=['flar', 'spot'], \
                                 boolclip=False, \
+                                #timescalbdtrspln=0.2, \
+                                bdtrtype='medi', \
+                                durakernbdtrmedi=0.05, \
                                 listtypemodlinfe=['spot'], \
                                 boolexectmat=gdat.boolexectmat, \
+                                dictlcurtessinpt=dictlcurtessinpt, \
                                 **dictmileinpt, \
                                )
         
