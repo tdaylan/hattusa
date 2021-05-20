@@ -1,5 +1,16 @@
 import sys
 
+import matplotlib.pyplot as plt
+import numpy as np
+x = np.arange(10)
+figrsizeydob = [8., 4.]
+figr, axis = plt.subplots(figsize=figrsizeydob)
+axis.plot(x, x)
+axis.set_ylabel('Flux')
+axis.set_xlabel('Time [BJD]')
+plt.savefig('/Users/tdaylan/Desktop/test1.pdf')
+plt.close()
+            
 import hattusa
 
 def cnfg_cplxrota():
@@ -16,11 +27,20 @@ def cnfg_cplxrota():
     init(listticitarg=listticitarg)
 
 
-def cnfg_mockcplxrota():
+def cnfg_mock():
    
     boolfitt = False
     hattusa.init( \
+                 typepopl='simp', \
                  typedata='mock', \
+                )
+
+
+def cnfg_tyr1():
+   
+    hattusa.init( \
+                 # population of stars in the TESS Year 1 flare paper (Guenther+2019)
+                 typepopl='tyr1', \
                 )
 
 
