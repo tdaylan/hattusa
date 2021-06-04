@@ -18,44 +18,13 @@ import astropy.units as u
 from astropy.io import fits
 from astropy.coordinates import SkyCoord
 
-x = np.arange(10)
-figrsizeydob = [8., 4.]
-figr, axis = plt.subplots(figsize=figrsizeydob)
-axis.plot(x, x)
-axis.set_ylabel('Flux')
-axis.set_xlabel('Time [BJD]')
-plt.savefig('/Users/tdaylan/Desktop/test2.pdf')
-plt.close()
-            
 import miletos
 import tdpy
 from tdpy import summgene
 import ephesus
 
-import matplotlib.pyplot as plt
-import numpy as np
-x = np.arange(10)
-figrsizeydob = [8., 4.]
-figr, axis = plt.subplots(figsize=figrsizeydob)
-axis.plot(x, x)
-axis.set_ylabel('Flux')
-axis.set_xlabel('Time [BJD]')
-plt.savefig('/Users/tdaylan/Desktop/test9.pdf')
-plt.close()
-            
 import pcat
 
-import matplotlib.pyplot as plt
-import numpy as np
-x = np.arange(10)
-figrsizeydob = [8., 4.]
-figr, axis = plt.subplots(figsize=figrsizeydob)
-axis.plot(x, x)
-axis.set_ylabel('Flux')
-axis.set_xlabel('Time [BJD]')
-plt.savefig('/Users/tdaylan/Desktop/test10.pdf')
-plt.close()
-            
 
 def retr_lcurmodl_flarsing(meantime, timeflar, amplflar, scalrise, scalfall):
     
@@ -190,9 +159,9 @@ def retr_lcurmodl_spotflar(gdat, para):
 
     ldcv = [dictpara['ldc1'], dictpara['ldc2']]
     
-    lcurmodlspot = np.empty((gdat.numbspot, gdat.numbtime))
-    lcurmodlevol = np.empty((gdat.numbspot, gdat.numbtime))
-    lcurmodlflar = np.empty(gdat.numbtime)
+    lcurmodlspot = np.empty((gdat.numbspot, gdat.timethis.size))
+    lcurmodlevol = np.empty((gdat.numbspot, gdat.timethis.size))
+    lcurmodlflar = np.empty(gdat.timethis.size)
     for i in range(gdat.numbspot):
 
         # rotation period at the spot's latitude
@@ -374,16 +343,16 @@ def init( \
     if gdat.typedata == 'mock':
         
         # time axis
-        gdat.numbtime = 1080
         minmtime = 0.
-        maxmtime = 180. * 6. * 1. / 6.
+        maxmtime = 30.
+        difftime = 2. / 60. / 24.
             
-        gdat.lcurdata = [np.empty(gdat.numbtime) for k in gdat.indxtarg]
-        gdat.lcurdatastdv = [np.empty(gdat.numbtime) for k in gdat.indxtarg]
-        gdat.lcurmodl = [np.empty(gdat.numbtime) for k in gdat.indxtarg]
+        gdat.lcurdata = [[] for k in gdat.indxtarg]
+        gdat.lcurdatastdv = [[] for k in gdat.indxtarg]
+        gdat.lcurmodl = [[] for k in gdat.indxtarg]
         
         for k in gdat.indxtarg:
-            gdat.time[k] = np.linspace(minmtime, maxmtime, gdat.numbtime)
+            gdat.time[k] = np.arange(minmtime, maxmtime, difftime)
             
         if gdat.typemodltrue == 'spotflar':
             # number of spots
@@ -425,13 +394,10 @@ def init( \
                 
                 gdat.timethis = gdat.time[k]
                 
-                print('gdat.timethis')
-                summgene(gdat.timethis)
-                
                 gdat.numbspot = gdat.listnumbspot[k]
                 gdat.numbflar = gdat.listnumbflar[k]
-                gdat.lcurmodlspot[k] = np.empty((gdat.numbspot, gdat.numbtime))
-                gdat.lcurmodlevol[k] = np.empty((gdat.numbspot, gdat.numbtime))
+                gdat.lcurmodlspot[k] = np.empty((gdat.numbspot, gdat.time[k].size))
+                gdat.lcurmodlevol[k] = np.empty((gdat.numbspot, gdat.time[k].size))
 
                 indxspot = np.arange(gdat.listnumbspot[k])
                 
@@ -487,7 +453,7 @@ def init( \
         for k in gdat.indxtarg:
             
             # add white noise to the overall light curve to get the synthetic data
-            gdat.lcurdata[k] = gdat.lcurmodl[k] + np.random.randn(gdat.numbtime) * 1e-4
+            gdat.lcurdata[k] = gdat.lcurmodl[k] + np.random.randn(gdat.time[k].size) * 1e-4
             
             # add red noise
             sigm = np.random.rand() * 0.0005
@@ -496,7 +462,7 @@ def init( \
             logtrhoo = np.log(rhoo)
             #noisredd = retr_noisredd(gdat.time, logtsigm, logtrhoo)
             #gdat.lcurdata[k, :] += noisredd
-            #gdat.lcurdatastdv[k, :] = gdat.lcurdata[k, :] * 1e-3
+            gdat.lcurdatastdv[k] = gdat.lcurdata[k] * 1e-3
         
         print('%d light curves have been generated.' % gdat.numbtarg)
         
@@ -542,7 +508,7 @@ def init( \
             
             labltarg = None
         else:
-            arry = np.empty((gdat.numbtime, 3))
+            arry = np.empty((gdat.time[k].size, 3))
             arry[:, 0] = gdat.time[k] 
             arry[:, 1] = gdat.lcurdata[k]
             arry[:, 2] = gdat.lcurdatastdv[k]

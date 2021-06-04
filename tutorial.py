@@ -1,16 +1,5 @@
 import sys
 
-import matplotlib.pyplot as plt
-import numpy as np
-x = np.arange(10)
-figrsizeydob = [8., 4.]
-figr, axis = plt.subplots(figsize=figrsizeydob)
-axis.plot(x, x)
-axis.set_ylabel('Flux')
-axis.set_xlabel('Time [BJD]')
-plt.savefig('/Users/tdaylan/Desktop/test1.pdf')
-plt.close()
-            
 import hattusa
 
 def cnfg_cplxrota():
