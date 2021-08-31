@@ -1,2 +1,2 @@
 # hattusa
-Pipeline to model stellar variability
+hattusa is a pipeline to model stellar variability
