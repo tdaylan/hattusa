@@ -26,22 +26,6 @@ import ephesus
 import pcat
 
 
-def retr_lcurmodl_flarsing(meantime, timeflar, amplflar, scalrise, scalfall):
-    
-    numbtime = meantime.size
-    if numbtime == 0:
-        raise Exception('')
-    indxtime = np.arange(numbtime)
-    indxtimerise = np.where(meantime < timeflar)[0]
-    indxtimefall = np.setdiff1d(indxtime, indxtimerise)
-    lcur = np.empty_like(meantime)
-    lcur[indxtimerise] = np.exp((meantime[indxtimerise] - timeflar) / scalrise)
-    lcur[indxtimefall] = np.exp(-(meantime[indxtimefall] - timeflar) / scalfall)
-    lcur *= amplflar / np.amax(lcur) 
-    
-    return lcur
-
-
 def plot_totl(gdat, k, dictpara):
     
     strgtitlstar = 'N=%d, u1=%.3g, u2=%.3g, i=%.3g deg, P=%.3g day' % (gdat.listnumbspot[k], dictpara['ldc1'], dictpara['ldc2'], \
@@ -192,7 +176,7 @@ def retr_lcurmodl_spotflar(gdat, para):
     numbflar = len(dictpara['timeflar'])
     lcurmodlflar = np.zeros_like(lcurmodl)
     for i in range(numbflar):
-        lcurmodlflar += retr_lcurmodl_flarsing(gdat.timethis, dictpara['timeflar'][i], \
+        lcurmodlflar += ephesus.retr_lcurmodl_flarsing(gdat.timethis, dictpara['timeflar'][i], \
                                         dictpara['amplflar'][i], dictpara['scalrise'][i], dictpara['scalfall'][i])
     
     lcurmodl += lcurmodlflar
